@@ -8,9 +8,11 @@ enum ConnectionStatus {
   CONNECTED,
 }
 
-const webSocketConnection = new WebSocket("ws://localhost:8080/videochat");
+const webSocketConnection = new WebSocket("ws://localhost:8061/api/videochat");
+const chatId = '41bf7460-1a1a-41cb-8b2f-a89688671b33';
 
 export const VideoCall = () => {
+  const [token, setToken] = React.useState('<STUDENT_TOKEN>');
   const videoSelf = useRef<HTMLVideoElement | null>(null);
   const videoCaller = useRef<HTMLVideoElement | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
@@ -20,6 +22,7 @@ export const VideoCall = () => {
   useEffect(() => {
     webSocketConnection.onmessage = (message: any) => {
       const payload = JSON.parse(message.data);
+      console.log("webSocketConnection.onmessage", payload);
       if (payload?.type === "offer") {
         setOfferSignal(payload);
         setConnectionStatus(ConnectionStatus.RECEIVING);
@@ -42,7 +45,14 @@ export const VideoCall = () => {
       if (isInitiator) setConnectionStatus(ConnectionStatus.OFFERING);
       else offer && sp.signal(offer);
 
-      sp.on("signal", (data) => webSocketConnection.send(JSON.stringify(data)));
+      sp.on("signal", (data) => {
+        const payload = Object.assign(data, {
+          token,
+          chatId
+        });
+        console.log("sp.on('signal'", payload);
+        webSocketConnection.send(JSON.stringify(payload));
+      });
       sp.on("connect", () => setConnectionStatus(ConnectionStatus.CONNECTED));
       sp.on("stream", (stream) => {
         const video = videoCaller.current;
@@ -53,8 +63,39 @@ export const VideoCall = () => {
     });
   };
 
+  const handleChange = (event: any) => {
+    setToken(event.target.value);
+  };
+
+  const init = () => {
+    const payload = {
+      token,
+      type: 'init'
+    }
+    console.log("init()", payload);
+    webSocketConnection.send(JSON.stringify(payload));
+  }
+
   return (
     <div className="web-rtc-page">
+      {!connectionStatus && 
+        <label>
+          Which user?
+          <select value={token} onChange={handleChange}>
+            <option value="<STUDENT_TOKEN>">
+              Student
+            </option>
+            <option value="<ADMIN_TOKEN>">
+              Admin
+            </option>
+          </select>
+        </label>
+      }
+      {
+        !connectionStatus &&
+          <button onClick={() => init()}>INIT</button>
+      }
+
       {connectionStatus === null && <button onClick={() => sendOrAcceptInvitation(true)}>CALL</button>}
       {connectionStatus === ConnectionStatus.OFFERING && <div className="loader"></div>}
       {connectionStatus === ConnectionStatus.RECEIVING && (
